@@ -1,4 +1,4 @@
-package yamux
+package zmux
 
 import (
 	"bytes"
@@ -832,7 +832,7 @@ func TestKeepAlive_Timeout(t *testing.T) {
 		t.Fatalf("server should have closed")
 	}
 
-	if !serverLogs.match([]string{"[ERR] yamux: keepalive failed: i/o deadline reached"}) {
+	if !serverLogs.match([]string{"[ERR] zmux: keepalive failed: i/o deadline reached"}) {
 		t.Fatalf("server log incorect: %v", serverLogs.logs())
 	}
 }

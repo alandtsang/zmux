@@ -1,4 +1,4 @@
-package yamux
+package zmux
 
 import (
 	"bufio"
@@ -184,7 +184,7 @@ GET_ID:
 		select {
 		case <-s.synCh:
 		default:
-			s.logger.Printf("[ERR] yamux: aborted stream open without inflight syn semaphore")
+			s.logger.Printf("[ERR] zmux: aborted stream open without inflight syn semaphore")
 		}
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func (s *Session) keepalive() {
 			_, err := s.Ping()
 			if err != nil {
 				if err != ErrSessionShutdown {
-					s.logger.Printf("[ERR] yamux: keepalive failed: %v", err)
+					s.logger.Printf("[ERR] zmux: keepalive failed: %v", err)
 					s.exitErr(ErrKeepAliveTimeout)
 				}
 				return
@@ -399,7 +399,7 @@ func (s *Session) send() {
 				for sent < len(ready.Hdr) {
 					n, err := s.conn.Write(ready.Hdr[sent:])
 					if err != nil {
-						s.logger.Printf("[ERR] yamux: Failed to write header: %v", err)
+						s.logger.Printf("[ERR] zmux: Failed to write header: %v", err)
 						asyncSendErr(ready.Err, err)
 						s.exitErr(err)
 						return
@@ -412,7 +412,7 @@ func (s *Session) send() {
 			if ready.Body != nil {
 				_, err := io.Copy(s.conn, ready.Body)
 				if err != nil {
-					s.logger.Printf("[ERR] yamux: Failed to write body: %v", err)
+					s.logger.Printf("[ERR] zmux: Failed to write body: %v", err)
 					asyncSendErr(ready.Err, err)
 					s.exitErr(err)
 					return
@@ -452,14 +452,14 @@ func (s *Session) recvLoop() error {
 		// Read the header
 		if _, err := io.ReadFull(s.bufRead, hdr); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "closed") && !strings.Contains(err.Error(), "reset by peer") {
-				s.logger.Printf("[ERR] yamux: Failed to read header: %v", err)
+				s.logger.Printf("[ERR] zmux: Failed to read header: %v", err)
 			}
 			return err
 		}
 
 		// Verify the version
 		if hdr.Version() != protoVersion {
-			s.logger.Printf("[ERR] yamux: Invalid protocol version: %d", hdr.Version())
+			s.logger.Printf("[ERR] zmux: Invalid protocol version: %d", hdr.Version())
 			return ErrInvalidVersion
 		}
 
@@ -494,13 +494,13 @@ func (s *Session) handleStreamMessage(hdr header) error {
 	if stream == nil {
 		// Drain any data on the wire
 		if hdr.MsgType() == typeData && hdr.Length() > 0 {
-			s.logger.Printf("[WARN] yamux: Discarding data for stream: %d", id)
+			s.logger.Printf("[WARN] zmux: Discarding data for stream: %d", id)
 			if _, err := io.CopyN(ioutil.Discard, s.bufRead, int64(hdr.Length())); err != nil {
-				s.logger.Printf("[ERR] yamux: Failed to discard data: %v", err)
+				s.logger.Printf("[ERR] zmux: Failed to discard data: %v", err)
 				return nil
 			}
 		} else {
-			s.logger.Printf("[WARN] yamux: frame for missing stream: %v", hdr)
+			s.logger.Printf("[WARN] zmux: frame for missing stream: %v", hdr)
 		}
 		return nil
 	}
@@ -509,7 +509,7 @@ func (s *Session) handleStreamMessage(hdr header) error {
 	if hdr.MsgType() == typeWindowUpdate {
 		if err := stream.incrSendWindow(hdr, flags); err != nil {
 			if sendErr := s.sendNoWait(s.goAway(goAwayProtoErr)); sendErr != nil {
-				s.logger.Printf("[WARN] yamux: failed to send go away: %v", sendErr)
+				s.logger.Printf("[WARN] zmux: failed to send go away: %v", sendErr)
 			}
 			return err
 		}
@@ -519,7 +519,7 @@ func (s *Session) handleStreamMessage(hdr header) error {
 	// Read the new data
 	if err := stream.readData(hdr, flags, s.bufRead); err != nil {
 		if sendErr := s.sendNoWait(s.goAway(goAwayProtoErr)); sendErr != nil {
-			s.logger.Printf("[WARN] yamux: failed to send go away: %v", sendErr)
+			s.logger.Printf("[WARN] zmux: failed to send go away: %v", sendErr)
 		}
 		return err
 	}
@@ -538,7 +538,7 @@ func (s *Session) handlePing(hdr header) error {
 			hdr := header(make([]byte, headerSize))
 			hdr.encode(typePing, flagACK, 0, pingID)
 			if err := s.sendNoWait(hdr); err != nil {
-				s.logger.Printf("[WARN] yamux: failed to send ping reply: %v", err)
+				s.logger.Printf("[WARN] zmux: failed to send ping reply: %v", err)
 			}
 		}()
 		return nil
@@ -562,13 +562,13 @@ func (s *Session) handleGoAway(hdr header) error {
 	case goAwayNormal:
 		atomic.SwapInt32(&s.remoteGoAway, 1)
 	case goAwayProtoErr:
-		s.logger.Printf("[ERR] yamux: received protocol error go away")
-		return fmt.Errorf("yamux protocol error")
+		s.logger.Printf("[ERR] zmux: received protocol error go away")
+		return fmt.Errorf("zmux protocol error")
 	case goAwayInternalErr:
-		s.logger.Printf("[ERR] yamux: received internal error go away")
-		return fmt.Errorf("remote yamux internal error")
+		s.logger.Printf("[ERR] zmux: received internal error go away")
+		return fmt.Errorf("remote zmux internal error")
 	default:
-		s.logger.Printf("[ERR] yamux: received unexpected go away")
+		s.logger.Printf("[ERR] zmux: received unexpected go away")
 		return fmt.Errorf("unexpected go away received")
 	}
 	return nil
@@ -591,9 +591,9 @@ func (s *Session) incomingStream(id uint32) error {
 
 	// Check if stream already exists
 	if _, ok := s.streams[id]; ok {
-		s.logger.Printf("[ERR] yamux: duplicate stream declared")
+		s.logger.Printf("[ERR] zmux: duplicate stream declared")
 		if sendErr := s.sendNoWait(s.goAway(goAwayProtoErr)); sendErr != nil {
-			s.logger.Printf("[WARN] yamux: failed to send go away: %v", sendErr)
+			s.logger.Printf("[WARN] zmux: failed to send go away: %v", sendErr)
 		}
 		return ErrDuplicateStream
 	}
@@ -607,7 +607,7 @@ func (s *Session) incomingStream(id uint32) error {
 		return nil
 	default:
 		// Backlog exceeded! RST the stream
-		s.logger.Printf("[WARN] yamux: backlog exceeded, forcing connection reset")
+		s.logger.Printf("[WARN] zmux: backlog exceeded, forcing connection reset")
 		delete(s.streams, id)
 		stream.sendHdr.encode(typeWindowUpdate, flagRST, id, 0)
 		return s.sendNoWait(stream.sendHdr)
@@ -623,7 +623,7 @@ func (s *Session) closeStream(id uint32) {
 		select {
 		case <-s.synCh:
 		default:
-			s.logger.Printf("[ERR] yamux: SYN tracking out of sync")
+			s.logger.Printf("[ERR] zmux: SYN tracking out of sync")
 		}
 	}
 	delete(s.streams, id)
@@ -637,12 +637,12 @@ func (s *Session) establishStream(id uint32) {
 	if _, ok := s.inflight[id]; ok {
 		delete(s.inflight, id)
 	} else {
-		s.logger.Printf("[ERR] yamux: established stream without inflight SYN (no tracking entry)")
+		s.logger.Printf("[ERR] zmux: established stream without inflight SYN (no tracking entry)")
 	}
 	select {
 	case <-s.synCh:
 	default:
-		s.logger.Printf("[ERR] yamux: established stream without inflight SYN (didn't have semaphore)")
+		s.logger.Printf("[ERR] zmux: established stream without inflight SYN (didn't have semaphore)")
 	}
 	s.streamLock.Unlock()
 }

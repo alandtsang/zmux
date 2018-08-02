@@ -1,4 +1,4 @@
-package yamux
+package zmux
 
 import (
 	"bytes"
@@ -362,7 +362,7 @@ func (s *Stream) processFlags(flags uint16) error {
 			closeStream = true
 			s.notifyWaiting()
 		default:
-			s.session.logger.Printf("[ERR] yamux: unexpected FIN flag in state %d", s.state)
+			s.session.logger.Printf("[ERR] zmux: unexpected FIN flag in state %d", s.state)
 			return ErrUnexpectedFlag
 		}
 	}
@@ -411,7 +411,7 @@ func (s *Stream) readData(hdr header, flags uint16, conn io.Reader) error {
 	s.recvLock.Lock()
 
 	if length > s.recvWindow {
-		s.session.logger.Printf("[ERR] yamux: receive window exceeded (stream: %d, remain: %d, recv: %d)", s.id, s.recvWindow, length)
+		s.session.logger.Printf("[ERR] zmux: receive window exceeded (stream: %d, remain: %d, recv: %d)", s.id, s.recvWindow, length)
 		return ErrRecvWindowExceeded
 	}
 
@@ -421,7 +421,7 @@ func (s *Stream) readData(hdr header, flags uint16, conn io.Reader) error {
 		s.recvBuf = bytes.NewBuffer(make([]byte, 0, length))
 	}
 	if _, err := io.Copy(s.recvBuf, conn); err != nil {
-		s.session.logger.Printf("[ERR] yamux: Failed to read stream data: %v", err)
+		s.session.logger.Printf("[ERR] zmux: Failed to read stream data: %v", err)
 		s.recvLock.Unlock()
 		return err
 	}

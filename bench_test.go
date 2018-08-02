@@ -1,4 +1,4 @@
-package yamux
+package zmux
 
 import (
 	"testing"
